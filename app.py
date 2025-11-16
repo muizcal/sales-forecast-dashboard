@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Load Data ---
+
 @st.cache_data
 def load_data():
     df = pd.read_csv("sales_data.csv")
@@ -27,7 +27,6 @@ Explore historical sales, trends, and forecast future Weekly Sales.
 Use the sidebar to filter by store and holiday status.
 """)
 
-# --- Sidebar Filters ---
 st.sidebar.header("Filters")
 selected_store = st.sidebar.multiselect(
     "Select Store",
@@ -45,10 +44,10 @@ filtered_df = df[
     (df["Holiday_Flag"].isin(holiday_filter))
 ]
 
-# --- Tabs ---
+
 tab1, tab2, tab3 = st.tabs(["Sales Dashboard", "EDA Charts", "Forecasting"])
 
-# --- TAB 1: Dashboard ---
+
 with tab1:
     st.subheader("Sales Overview")
     col1, col2, col3 = st.columns(3)
@@ -56,7 +55,7 @@ with tab1:
     col2.metric("Average Weekly Sales", f"${filtered_df['Weekly_Sales'].mean():,.2f}")
     col3.metric("Number of Stores", filtered_df['Store'].nunique())
 
-# --- TAB 2: EDA Charts ---
+
 with tab2:
     st.subheader("Weekly Sales Trend")
     weekly = filtered_df.groupby('Date')['Weekly_Sales'].sum().reset_index()
@@ -78,7 +77,7 @@ with tab2:
         fig_unemp = px.line(filtered_df, x='Date', y='Unemployment', color='Store', title='Unemployment Over Time')
         st.plotly_chart(fig_unemp, use_container_width=True)
 
-# --- TAB 3: Forecasting ---
+
 with tab3:
     st.subheader("Weekly Sales Forecast (Prophet Model)")
     # Prepare Prophet data
