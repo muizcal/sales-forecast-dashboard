@@ -88,23 +88,26 @@ with tab2:
 
 
 # TAB 3 — FORECASTING
-
 with tab3:
     st.subheader(" Sales Forecast (Prophet Model)")
 
     # Prepare data for Prophet
     prophet_df = monthly.rename(columns={"Date": "ds", "Sales": "y"})
 
-    # Prophet model
-    model = Prophet()
-    model.fit(prophet_df)
+    # Check if enough rows
+    if prophet_df.shape[0] < 2:
+        st.error("❌ Not enough data to train a forecasting model.")
+        st.info("Increase your date range or remove filters.")
+    else:
+        # Prophet model
+        model = Prophet()
+        model.fit(prophet_df)
 
-    future = model.make_future_dataframe(periods=12, freq="M")
-    forecast = model.predict(future)
+        future = model.make_future_dataframe(periods=12, freq="M")
+        forecast = model.predict(future)
 
-    st.write("### Forecast Output")
-    st.dataframe(forecast.tail())
+        st.write("### Forecast Output")
+        st.dataframe(forecast.tail())
 
-    fig_forecast = plot_plotly(model, forecast)
-    st.plotly_chart(fig_forecast, use_container_width=True)
-
+        fig_forecast = plot_plotly(model, forecast)
+        st.plotly_chart(fig_forecast, use_container_width=True)
