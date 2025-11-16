@@ -11,99 +11,88 @@ st.set_page_config(
     layout="wide"
 )
 
-
 @st.cache_data
 def load_data():
     return pd.read_csv("sales_data.csv", parse_dates=["Date"])
 
 df = load_data()
 
-st.title("📈 Sales Analytics & Forecasting Dashboard")
-st.markdown("Explore historical sales, trends, regions, categories, and future forecasts.")
+st.title("📈 Weekly Sales Dashboard")
+st.markdown("Explore historical weekly sales, store performance, and forecast future trends.")
 
 # Sidebar Filters
 st.sidebar.header("Filters")
 
-category_filter = st.sidebar.multiselect(
-    "Select Category", 
-    options=df["Category"].unique(),
-    default=df["Category"].unique()
+store_filter = st.sidebar.multiselect(
+    "Select Store",
+    options=df["Store"].unique(),
+    default=df["Store"].unique()
 )
 
-region_filter = st.sidebar.multiselect(
-    "Select Region", 
-    options=df["Region"].unique(),
-    default=df["Region"].unique()
+holiday_filter = st.sidebar.multiselect(
+    "Holiday Flag",
+    options=df["Holiday_Flag"].unique(),
+    default=df["Holiday_Flag"].unique()
 )
 
 filtered_df = df[
-    df["Category"].isin(category_filter) &
-    df["Region"].isin(region_filter)
+    (df["Store"].isin(store_filter)) &
+    (df["Holiday_Flag"].isin(holiday_filter))
 ]
 
 # Tabs
-tab1, tab2, tab3 = st.tabs([" Sales Dashboard", " Time-Series Trends", " Forecasting"])
+tab1, tab2, tab3 = st.tabs(["Sales Overview", "Time-Series Trends", "Forecasting"])
 
-
-# TAB 1 — DASHBOARD
-
+# --- TAB 1: Sales Overview ---
 with tab1:
-    st.subheader(" Sales Overview")
+    st.subheader("Key Metrics")
 
     col1, col2, col3 = st.columns(3)
-    
-    col1.metric("Total Sales", f"${filtered_df['Sales'].sum():,.0f}")
-    col2.metric("Units Sold", f"{filtered_df['UnitsSold'].sum():,.0f}")
-    col3.metric("Avg Price", f"${filtered_df['Price'].mean():.2f}")
+    col1.metric("Total Sales", f"${filtered_df['Weekly_Sales'].sum():,.0f}")
+    col2.metric("Average Weekly Sales", f"${filtered_df['Weekly_Sales'].mean():,.2f}")
+    col3.metric("Number of Stores", filtered_df['Store'].nunique())
 
-    # Sales by Category
-    fig_cat = px.bar(
-        filtered_df.groupby("Category")["Sales"].sum().reset_index(),
-        x="Category", y="Sales", title="Sales by Category"
+    # Sales by Store
+    fig_store = px.bar(
+        filtered_df.groupby("Store")["Weekly_Sales"].sum().reset_index(),
+        x="Store", y="Weekly_Sales", title="Total Sales by Store"
     )
-    st.plotly_chart(fig_cat, use_container_width=True)
+    st.plotly_chart(fig_store, use_container_width=True)
 
-    # Sales by Region
-    fig_region = px.pie(
-        filtered_df,
-        names="Region", values="Sales",
-        title="Sales Share by Region"
+    # Holiday vs Non-Holiday Sales
+    fig_holiday = px.pie(
+        filtered_df.groupby("Holiday_Flag")["Weekly_Sales"].sum().reset_index(),
+        names="Holiday_Flag", values="Weekly_Sales",
+        title="Sales: Holiday vs Non-Holiday"
     )
-    st.plotly_chart(fig_region, use_container_width=True)
+    st.plotly_chart(fig_holiday, use_container_width=True)
 
-
-# TAB 2 — TIME SERIES
-
+# TAB 2: Time-Series Trends
 with tab2:
-    st.subheader(" Monthly Sales Trend")
+    st.subheader("Weekly Sales Trend")
 
-    monthly = (
-        filtered_df.groupby(pd.Grouper(key="Date", freq="M"))["Sales"]
-        .sum()
-        .reset_index()
+    weekly = filtered_df.groupby("Date")["Weekly_Sales"].sum().reset_index()
+
+    fig_trend = px.line(
+        weekly, x="Date", y="Weekly_Sales", title="Weekly Sales Over Time"
     )
-
-    fig_trend = px.line(monthly, x="Date", y="Sales", title="Monthly Sales Trend")
     st.plotly_chart(fig_trend, use_container_width=True)
 
-
-# TAB 3 — FORECASTING
+# TAB 3: Forecasting 
 with tab3:
-    st.subheader(" Sales Forecast (Prophet Model)")
+    st.subheader("Sales Forecast (Prophet Model)")
 
-    # Prepare data for Prophet
-    prophet_df = monthly.rename(columns={"Date": "ds", "Sales": "y"})
+   
+    prophet_df = weekly.rename(columns={"Date": "ds", "Weekly_Sales": "y"})
 
-    # Check if enough rows
     if prophet_df.shape[0] < 2:
         st.error("❌ Not enough data to train a forecasting model.")
-        st.info("Increase your date range or remove filters.")
+        st.info("Ensure filters are not too restrictive.")
     else:
-        # Prophet model
         model = Prophet()
         model.fit(prophet_df)
 
-        future = model.make_future_dataframe(periods=12, freq="M")
+        future = model.make_future_dataframe(periods=12, freq="W")  # Weekly forecast
         forecast = model.predict(future)
 
         st.write("### Forecast Output")
