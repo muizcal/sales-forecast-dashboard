@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 from prophet import Prophet
 from prophet.plot import plot_plotly
-import matplotlib.pyplot as plt
 
 st.set_page_config(
     page_title="Sales Forecasting Dashboard",
@@ -14,96 +13,84 @@ st.set_page_config(
 # --- Load Data ---
 @st.cache_data
 def load_data():
-    df = pd.read_csv("sales_data.csv", parse_dates=["Date"])
+    df = pd.read_csv("sales_data.csv")
+    # Clean Date column
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    df = df.dropna(subset=['Date'])
     return df
 
 df = load_data()
 
+st.title("📈 Sales Analytics & Forecasting Dashboard")
+st.markdown("""
+Explore historical sales, trends, and forecast future Weekly Sales.  
+Use the sidebar to filter by store and holiday status.
+""")
+
 # --- Sidebar Filters ---
 st.sidebar.header("Filters")
-
-store_filter = st.sidebar.multiselect(
-    "Select Store", 
+selected_store = st.sidebar.multiselect(
+    "Select Store",
     options=df["Store"].unique(),
     default=df["Store"].unique()
 )
-
 holiday_filter = st.sidebar.multiselect(
-    "Holiday Flag", 
+    "Holiday Flag",
     options=df["Holiday_Flag"].unique(),
     default=df["Holiday_Flag"].unique()
 )
 
-# Convert min/max dates to Python date objects
-date_min = df["Date"].min().date()
-date_max = df["Date"].max().date()
-
-date_range = st.sidebar.date_input(
-    "Select Date Range",
-    value=(date_min, date_max),
-    min_value=date_min,
-    max_value=date_max
-)
-
-# --- Filter Data ---
 filtered_df = df[
-    (df["Store"].isin(store_filter)) &
-    (df["Holiday_Flag"].isin(holiday_filter)) &
-    (df["Date"].dt.date.between(date_range[0], date_range[1]))
+    (df["Store"].isin(selected_store)) &
+    (df["Holiday_Flag"].isin(holiday_filter))
 ]
 
 # --- Tabs ---
-tab1, tab2, tab3 = st.tabs(["Dashboard", "Time-Series Trends", "Forecasting"])
+tab1, tab2, tab3 = st.tabs(["Sales Dashboard", "EDA Charts", "Forecasting"])
 
-# --- TAB 1: DASHBOARD ---
+# --- TAB 1: Dashboard ---
 with tab1:
     st.subheader("Sales Overview")
-    
     col1, col2, col3 = st.columns(3)
     col1.metric("Total Sales", f"${filtered_df['Weekly_Sales'].sum():,.0f}")
-    col2.metric("Average Weekly Sales", f"${filtered_df['Weekly_Sales'].mean():,.0f}")
-    col3.metric("Number of Stores", f"{filtered_df['Store'].nunique()}")
+    col2.metric("Average Weekly Sales", f"${filtered_df['Weekly_Sales'].mean():,.2f}")
+    col3.metric("Number of Stores", filtered_df['Store'].nunique())
 
-    # Sales by Store
-    fig_store = px.bar(
-        filtered_df.groupby("Store")["Weekly_Sales"].sum().reset_index(),
-        x="Store", y="Weekly_Sales",
-        title="Total Sales by Store"
-    )
-    st.plotly_chart(fig_store, use_container_width=True)
-
-    # Holiday vs Non-Holiday Sales
-    fig_holiday = px.pie(
-        filtered_df.groupby("Holiday_Flag")["Weekly_Sales"].sum().reset_index(),
-        names="Holiday_Flag", values="Weekly_Sales",
-        title="Sales: Holiday vs Non-Holiday"
-    )
-    st.plotly_chart(fig_holiday, use_container_width=True)
-
-# --- TAB 2: TIME-SERIES ---
+# --- TAB 2: EDA Charts ---
 with tab2:
     st.subheader("Weekly Sales Trend")
-    weekly = (
-        filtered_df.groupby(pd.Grouper(key="Date", freq="W"))["Weekly_Sales"]
-        .sum()
-        .reset_index()
-    )
-    fig_trend = px.line(weekly, x="Date", y="Weekly_Sales", title="Weekly Sales Trend")
-    st.plotly_chart(fig_trend, use_container_width=True)
+    weekly = filtered_df.groupby('Date')['Weekly_Sales'].sum().reset_index()
+    fig_sales = px.line(weekly, x="Date", y="Weekly_Sales", title="Weekly Sales Over Time")
+    st.plotly_chart(fig_sales, use_container_width=True)
 
-# --- TAB 3: FORECASTING ---
+    st.subheader("Temperature, Fuel Price, CPI, and Unemployment")
+    col1, col2 = st.columns(2)
+    with col1:
+        fig_temp = px.line(filtered_df, x='Date', y='Temperature', color='Store', title='Temperature Over Time')
+        st.plotly_chart(fig_temp, use_container_width=True)
+
+        fig_fuel = px.line(filtered_df, x='Date', y='Fuel_Price', color='Store', title='Fuel Price Over Time')
+        st.plotly_chart(fig_fuel, use_container_width=True)
+    with col2:
+        fig_cpi = px.line(filtered_df, x='Date', y='CPI', color='Store', title='CPI Over Time')
+        st.plotly_chart(fig_cpi, use_container_width=True)
+
+        fig_unemp = px.line(filtered_df, x='Date', y='Unemployment', color='Store', title='Unemployment Over Time')
+        st.plotly_chart(fig_unemp, use_container_width=True)
+
+# --- TAB 3: Forecasting ---
 with tab3:
-    st.subheader("Sales Forecast (Prophet Model)")
-
+    st.subheader("Weekly Sales Forecast (Prophet Model)")
+    # Prepare Prophet data
     prophet_df = weekly.rename(columns={"Date": "ds", "Weekly_Sales": "y"})
-
+    
     if prophet_df.shape[0] < 2:
-        st.error("❌ Not enough data to train a forecasting model.")
-        st.info("Adjust date range or remove filters.")
+        st.error("❌ Not enough data to train the forecast model.")
     else:
         model = Prophet()
         model.fit(prophet_df)
-        future = model.make_future_dataframe(periods=12, freq="W")
+
+        future = model.make_future_dataframe(periods=12, freq='W')
         forecast = model.predict(future)
 
         st.write("### Forecast Output")
